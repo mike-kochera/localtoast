@@ -45,6 +45,10 @@ var (
 	procTCPRe = regexp.MustCompile("^\\s*[0-9]+:\\s+([0-9A-F]+):([0-9A-F]+)\\s+[0-9A-F]+:[0-9A-F]+\\s+([0-9A-F]+)\\s+.*$")
 	// Regexp for capturing the UID_MIN value from the /etc/login.defs file.
 	uidMinRe = regexp.MustCompile("^UID_MIN\\s+(\\d+)$")
+	// Regexp for capturing the SYS_UID_MIN value from the /etc/login.defs file.
+        sysUidMinRe = regexp.MustCompile("^SYS_UID_MIN\\s+(\\d+)$")
+	// Regexp for capturing the SYS_UID_MAX value from the /etc/login.defs file.
+        sysUidMaxRe = regexp.MustCompile("^SYS_UID_MAX\\s+(\\d+)$")
 )
 
 // RepeatConfig is a single repeat config that specifies what tokens to replace
@@ -108,9 +112,19 @@ type userRepeatConfigOptions struct {
 // true, only the system users are included in the config.
 func createRepeatConfigForEachUser(ctx context.Context, opt userRepeatConfigOptions) ([]*RepeatConfig, error) {
 	uidMin := -1
+	sysUidMin := -1
+	sysUidMax := -1
 	if opt.systemOnly {
 		var err error
 		uidMin, err = readUIDMin(ctx, opt.fileReader)
+		if err != nil {
+                        return nil, err
+                }
+		sysUidMin, err = readSysUidMin(ctx, opt.fileReader)
+		if err != nil {
+                        return nil, err
+                }
+		sysUidMax, err = readSysUidMax(ctx, opt.fileReader)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +162,7 @@ func createRepeatConfigForEachUser(ctx context.Context, opt userRepeatConfigOpti
 			if err != nil {
 				return nil, err
 			}
-			if uidInt >= uidMin { // Non-system users' uid starts from UID_MIN.
+			if uidInt <= sysUidMin || uidInt >= sysUidMax  { // Non-system users' uid starts from UID_MIN.
 				continue
 			}
 		}
@@ -208,6 +222,64 @@ func readUIDMin(ctx context.Context, f scanapi.Filesystem) (int, error) {
 		}
 	}
 	return uidMin, nil
+}
+
+func readSysUIDMin(ctx context.Context, f scanapi.Filesystem) (int, error) {
+	r, err := f.OpenFile(ctx, "/etc/login.defs")
+	if err != nil {
+		return 0, err
+	}
+	defer r.Close()
+
+	sysUidMin := defaultUIDMin
+
+	scanner := bufio.NewScanner(r)
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		if scanner.Err() != nil {
+			return 0, scanner.Err()
+		}
+
+		line := scanner.Text()
+		groups := sysUidMinRe.FindStringSubmatch(line)
+
+		if groups != nil {
+			sysUidMin, err = strconv.Atoi(groups[1])
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
+	return sysUidMin, nil
+}
+
+func readSysUIDMax(ctx context.Context, f scanapi.Filesystem) (int, error) {
+        r, err := f.OpenFile(ctx, "/etc/login.defs")
+        if err != nil {
+                return 0, err
+        }
+        defer r.Close()
+
+        sysUidMax := defaultUIDMin
+
+        scanner := bufio.NewScanner(r)
+        scanner.Split(bufio.ScanLines)
+        for scanner.Scan() {
+                if scanner.Err() != nil {
+                        return 0, scanner.Err()
+                }
+
+                line := scanner.Text()
+                groups := sysUidMaxRe.FindStringSubmatch(line)
+
+                if groups != nil {
+                        sysUidMax, err = strconv.Atoi(groups[1])
+                        if err != nil {
+                                return 0, err
+                        }
+                }
+        }
+        return sysUidMax, nil
 }
 
 // createRepeatConfigForEachPort creates repeat configs that have the currently
