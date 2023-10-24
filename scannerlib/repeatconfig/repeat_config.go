@@ -111,15 +111,10 @@ type userRepeatConfigOptions struct {
 // repeat configs that have the usernames as the substitution. if systemOnly is
 // true, only the system users are included in the config.
 func createRepeatConfigForEachUser(ctx context.Context, opt userRepeatConfigOptions) ([]*RepeatConfig, error) {
-	uidMin := -1
 	sysUidMin := -1
 	sysUidMax := -1
 	if opt.systemOnly {
 		var err error
-		uidMin, err = readUIDMin(ctx, opt.fileReader)
-		if err != nil {
-                        return nil, err
-                }
 		sysUidMin, err = readSysUidMin(ctx, opt.fileReader)
 		if err != nil {
                         return nil, err
@@ -195,34 +190,34 @@ func createRepeatConfigForEachUser(ctx context.Context, opt userRepeatConfigOpti
 	return result, nil
 }
 
-func readUIDMin(ctx context.Context, f scanapi.Filesystem) (int, error) {
-	r, err := f.OpenFile(ctx, "/etc/login.defs")
-	if err != nil {
-		return 0, err
-	}
-	defer r.Close()
-
-	uidMin := defaultUIDMin
-
-	scanner := bufio.NewScanner(r)
-	scanner.Split(bufio.ScanLines)
-	for scanner.Scan() {
-		if scanner.Err() != nil {
-			return 0, scanner.Err()
-		}
-
-		line := scanner.Text()
-		groups := uidMinRe.FindStringSubmatch(line)
-
-		if groups != nil {
-			uidMin, err = strconv.Atoi(groups[1])
-			if err != nil {
-				return 0, err
-			}
-		}
-	}
-	return uidMin, nil
-}
+//func readUIDMin(ctx context.Context, f scanapi.Filesystem) (int, error) {
+//	r, err := f.OpenFile(ctx, "/etc/login.defs")
+//	if err != nil {
+//		return 0, err
+//	}
+//	defer r.Close()
+//
+//	uidMin := defaultUIDMin
+//
+//	scanner := bufio.NewScanner(r)
+//	scanner.Split(bufio.ScanLines)
+//	for scanner.Scan() {
+//		if scanner.Err() != nil {
+//			return 0, scanner.Err()
+//		}
+//
+//		line := scanner.Text()
+//		groups := uidMinRe.FindStringSubmatch(line)
+//
+//		if groups != nil {
+//			uidMin, err = strconv.Atoi(groups[1])
+//			if err != nil {
+//				return 0, err
+//			}
+//		}
+//	}
+//	return uidMin, nil
+//}
 
 func readSysUIDMin(ctx context.Context, f scanapi.Filesystem) (int, error) {
 	r, err := f.OpenFile(ctx, "/etc/login.defs")
